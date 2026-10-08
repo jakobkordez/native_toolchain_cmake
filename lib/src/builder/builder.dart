@@ -360,7 +360,7 @@ class CMakeBuilder implements Builder {
       var arch = targetArchitecture.name.toLowerCase();
       // keep static and shared builds apart, they differ in the CMake cache
       if (staticForLinking) arch = '$arch-static';
-      outDir = sourceDir.resolve('build/').resolve('$plat/').resolve(arch).normalizePath();
+      outDir = sourceDir.resolve('build/').resolve('$plat/').resolve('$arch/').normalizePath();
     }
     final effectiveOutDir = outDir ?? outputDirectory;
     await Directory.fromUri(effectiveOutDir).create(recursive: true);

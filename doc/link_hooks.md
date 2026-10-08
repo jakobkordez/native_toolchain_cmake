@@ -171,11 +171,13 @@ These predate this feature.
 1. **Fixed.** [env_from_bat.dart](../lib/src/utils/env_from_bat.dart) ran `vcvars*.bat` by bare
    file name. That failed when `NoDefaultCurrentDirectoryInExePath` is set, because cmd then
    doesn't search the working directory. It now runs `.\vcvars*.bat`.
-2. **Open.** With `buildLocal`, the build folder URI has no trailing slash, so
-   `outDir.resolve('CMakeCache.txt')` points one folder up (`build/linux/` instead of
+2. **Fixed.** With `buildLocal`, the build folder URI had no trailing slash, so
+   `outDir.resolve('CMakeCache.txt')` pointed one folder up (`build/linux/` instead of
    `build/linux/x64/`). As a result:
-   - `skipGenerateIfCached` never takes effect with `buildLocal`.
-   - Different architectures share one `ntc_last_generate_status.txt`.
+   - `skipGenerateIfCached` never took effect with `buildLocal`.
+   - Different architectures shared one `ntc_last_generate_status.txt`.
+
+   `RunCMakeBuilder` now adds the trailing slash to any `outDir`, including one passed explicitly.
 3. **Open.** With an explicit `outDir`, static and shared builds share one CMake cache. Combined with
    `skipGenerateIfCached`, switching linking modes skips the configure step that would change
    `BUILD_SHARED_LIBS`. Use a different `outDir` per mode.

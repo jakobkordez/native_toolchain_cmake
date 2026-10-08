@@ -12,62 +12,82 @@ void main() {
   const name = 'hello_world';
   const sourceDir = 'test/builder/testfiles/hello_world';
 
-  test('CMakeBuilder skipGenerateIfCached', () async {
-    final tempUri = await tempDirForTest();
-    final tempUri2 = await tempDirForTest();
+  for (final buildLocal in [false, true]) {
+    test('CMakeBuilder skipGenerateIfCached${testSuffix([if (buildLocal) 'buildLocal'])}', () async {
+      final tempUri = await tempDirForTest();
+      final tempUri2 = await tempDirForTest();
 
-    final logMessages = <String>[];
-    final logger = createCapturingLogger(logMessages);
+      final logMessages = <String>[];
+      final logger = createCapturingLogger(logMessages);
 
-    final buildInputBuilder = BuildInputBuilder()
-      ..setupShared(
-        packageName: name,
-        packageRoot: tempUri,
-        outputFile: tempUri.resolve('output.json'),
-        outputDirectoryShared: tempUri2,
-      )
-      ..config.setupBuild(linkingEnabled: false)
-      ..addExtension(
-        CodeAssetExtension(
-          targetOS: OS.current,
-          macOS: OS.current == OS.macOS ? MacOSCodeConfig(targetVersion: defaultMacOSVersion) : null,
-          targetArchitecture: Architecture.current,
-          linkModePreference: LinkModePreference.dynamic,
-          cCompiler: cCompiler,
-        ),
+      final buildInputBuilder = BuildInputBuilder()
+        ..setupShared(
+          packageName: name,
+          packageRoot: tempUri,
+          outputFile: tempUri.resolve('output.json'),
+          outputDirectoryShared: tempUri2,
+        )
+        ..config.setupBuild(linkingEnabled: false)
+        ..addExtension(
+          CodeAssetExtension(
+            targetOS: OS.current,
+            macOS: OS.current == OS.macOS ? MacOSCodeConfig(targetVersion: defaultMacOSVersion) : null,
+            targetArchitecture: Architecture.current,
+            linkModePreference: LinkModePreference.dynamic,
+            cCompiler: cCompiler,
+          ),
+        );
+
+      final buildInput = BuildInput(buildInputBuilder.json);
+      final buildOutput = BuildOutputBuilder();
+
+      // buildLocal builds next to the sources, so build a copy of them.
+      final sourceUri = buildLocal
+          ? await copyDirectory(Directory(sourceDir), Directory.fromUri(tempUri.resolve('src/')))
+          : Directory(sourceDir).absolute.uri;
+
+      final builder = CMakeBuilder.create(
+        name: name,
+        sourceDir: sourceUri,
+        buildMode: BuildMode.release,
+        androidArgs: const AndroidBuilderArgs(),
+        appleArgs: const AppleBuilderArgs(),
+        buildLocal: buildLocal,
       );
 
-    final buildInput = BuildInput(buildInputBuilder.json);
-    final buildOutput = BuildOutputBuilder();
+      // First run: Generate and build
+      await builder.run(input: buildInput, output: buildOutput, logger: logger, skipGenerateIfCached: false);
 
-    final builder = CMakeBuilder.create(
-      name: name,
-      sourceDir: Directory(sourceDir).absolute.uri,
-      buildMode: BuildMode.release,
-      androidArgs: const AndroidBuilderArgs(),
-      appleArgs: const AppleBuilderArgs(),
-    );
+      // Verify first run logs DO NOT contain the skip message
+      expect(logMessages, isNot(contains(contains('CMake project is already successfully generated'))));
 
-    // First run: Generate and build
-    await builder.run(input: buildInput, output: buildOutput, logger: logger, skipGenerateIfCached: false);
+      // Clear logs for second run
+      logMessages.clear();
 
-    // Verify first run logs DO NOT contain the skip message
-    expect(logMessages, isNot(contains(contains('CMake project is already successfully generated'))));
+      // Second run: Skip generate if cached
+      await builder.run(input: buildInput, output: buildOutput, logger: logger, skipGenerateIfCached: true);
 
-    // Clear logs for second run
-    logMessages.clear();
-
-    // Second run: Skip generate if cached
-    await builder.run(input: buildInput, output: buildOutput, logger: logger, skipGenerateIfCached: true);
-
-    // Verify second run logs DO contain the skip message
-    expect(
-      logMessages,
-      contains(
+      // Verify second run logs DO contain the skip message
+      expect(
+        logMessages,
         contains(
-          'CMake project is already successfully generated and skipGenerateIfCached is requested, skip generating.',
+          contains(
+            'CMake project is already successfully generated and skipGenerateIfCached is requested, skip generating.',
+          ),
         ),
-      ),
-    );
-  });
+      );
+    });
+  }
+}
+
+/// Copies the files in [from] to [to], returns the absolute directory URI of [to].
+Future<Uri> copyDirectory(Directory from, Directory to) async {
+  final fromPath = from.absolute.uri.path;
+  await for (final entity in from.list(recursive: true)) {
+    if (entity is! File) continue;
+    final target = File.fromUri(to.uri.resolve(entity.absolute.uri.path.substring(fromPath.length)));
+    await target.parent.create(recursive: true);
+    await entity.copy(target.path);
+  }
+  return to.absolute.uri;
 }

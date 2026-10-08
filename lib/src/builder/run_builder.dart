@@ -35,6 +35,8 @@ class RunCMakeBuilder {
   final MacOSCodeConfig? macOS;
   final Logger? logger;
   final Uri sourceDir;
+
+  /// Build directory, always with a trailing slash so files resolve inside it.
   final Uri outDir;
 
   /// -D
@@ -80,7 +82,7 @@ class RunCMakeBuilder {
 
   RunCMakeBuilder({
     required this.sourceDir,
-    required this.outDir,
+    required Uri outDir,
     OS? targetOS,
     Architecture? targetArchitecture,
     this.android,
@@ -102,7 +104,8 @@ class RunCMakeBuilder {
     int? parallelJobs,
     UserConfig? userConfig,
     CodeConfig? codeConfig,
-  }) : targetOS = targetOS ?? codeConfig?.targetOS ?? OS.current,
+  }) : outDir = outDir.path.endsWith('/') ? outDir : outDir.replace(path: '${outDir.path}/'),
+       targetOS = targetOS ?? codeConfig?.targetOS ?? OS.current,
        targetArchitecture = targetArchitecture ?? codeConfig?.targetArchitecture ?? Architecture.current,
        userConfig = userConfig ?? UserConfig(targetOS: targetOS ?? codeConfig?.targetOS ?? OS.current),
        parallelJobs = parallelJobs ?? (parallelUseAllProcessors ? Platform.numberOfProcessors : null);

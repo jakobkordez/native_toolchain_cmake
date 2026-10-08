@@ -7,6 +7,7 @@
   - add `linkMode` to `findCodeAssets` and `findAndAddCodeAssets`, and `routing` to `findAndAddCodeAssets`, `addCodeAsset` and `addAllCodeAssets`, to route static libraries to a link hook
   - add `linkingEnabled` to `CMakeBuilder.runStandalone`
 - fix: run `vcvars*.bat` as `.\vcvars*.bat` in `environmentFromBatchFile`, so it is found when `NoDefaultCurrentDirectoryInExePath` is set
+- fix: treat the build output directory as a directory even without a trailing slash, so `skipGenerateIfCached` works with `buildLocal` and architectures no longer share one generate status file
 
 ## 0.3.2
 
