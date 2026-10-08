@@ -6,6 +6,7 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -183,20 +184,26 @@ class RunCMakeBuilder {
   /// - [environment] additional environment variables to pass to CMake.
   /// - [skipGenerateIfCached] whether to skip generating the CMake project.
   Future<void> run({Map<String, String>? environment, bool skipGenerateIfCached = false}) async {
+    final generateCommand = await _generateCommand(environment: environment);
     bool skipGenerate = false;
     if (skipGenerateIfCached) {
       final cmakeCacheExists = await File.fromUri(outDir.resolve('CMakeCache.txt')).exists();
       final lastGenExitCode = await getLastGenExitCode();
       if (cmakeCacheExists && lastGenExitCode == 0) {
-        logger?.warning(
-          'CMake project is already successfully generated '
-          'and skipGenerateIfCached is requested, skip generating.',
-        );
-        skipGenerate = true;
+        // e.g. changed defines need a new generate to take effect
+        if (await _getLastGenCommand() == _encodeCommand(generateCommand)) {
+          logger?.warning(
+            'CMake project is already successfully generated '
+            'and skipGenerateIfCached is requested, skip generating.',
+          );
+          skipGenerate = true;
+        } else {
+          logger?.info('CMake generate command changed since the last generate, generating again.');
+        }
       }
     }
     if (!skipGenerate) {
-      final result = await _generate(environment: environment);
+      final result = await _generate(generateCommand, environment: environment);
       if (result.exitCode != 0) {
         throw Exception('Failed to generate CMake project: ${result.stderr}');
       }
@@ -208,7 +215,39 @@ class RunCMakeBuilder {
     }
   }
 
-  Future<RunProcessResult> _generate({Map<String, String>? environment}) async {
+  static String _encodeCommand(({Uri executable, List<String> arguments}) command) =>
+      jsonEncode([command.executable.toFilePath(), ...command.arguments]);
+
+  Future<RunProcessResult> _generate(
+    ({Uri executable, List<String> arguments}) command, {
+    Map<String, String>? environment,
+  }) async {
+    final results = await runProcess(
+      executable: command.executable,
+      arguments: command.arguments,
+      workingDirectory: outDir,
+      logger: logger,
+      captureOutput: true,
+      throwOnUnexpectedExitCode: false,
+      environment: environment,
+    );
+
+    // save the last generate status
+    final msg =
+        "command: ${results.command}\n"
+        "generateCommand: ${_encodeCommand(command)}\n"
+        "exitCode: ${results.exitCode}\n"
+    // "stdout: ${results.stdout}\n"
+    // "stderr: ${results.stderr}\n"
+    ;
+    await File.fromUri(outDir.resolve(lastGenStatusFile)).writeAsString(msg);
+
+    return results;
+  }
+
+  Future<({Uri executable, List<String> arguments})> _generateCommand({
+    Map<String, String>? environment,
+  }) async {
     final defs = switch (targetOS) {
       OS.windows => await _generateWindowsDefines(),
       OS.linux => await _generateLinuxDefines(),
@@ -235,7 +274,7 @@ class RunCMakeBuilder {
     }
     final _generator = generator.toArgs();
 
-    final results = await runProcess(
+    return (
       executable: await cmakePath(environment: environment),
       arguments: [
         '--log-level=${logLevel.name}',
@@ -248,23 +287,7 @@ class RunCMakeBuilder {
         ..._generator,
         ..._defines,
       ],
-      workingDirectory: outDir,
-      logger: logger,
-      captureOutput: true,
-      throwOnUnexpectedExitCode: false,
-      environment: environment,
     );
-
-    // save the last generate status
-    final msg =
-        "command: ${results.command}\n"
-        "exitCode: ${results.exitCode}\n"
-    // "stdout: ${results.stdout}\n"
-    // "stderr: ${results.stderr}\n"
-    ;
-    await File.fromUri(outDir.resolve(lastGenStatusFile)).writeAsString(msg);
-
-    return results;
   }
 
   Future<RunProcessResult> _build({Map<String, String>? environment}) async {
@@ -430,6 +453,19 @@ class RunCMakeBuilder {
       content.firstWhere((line) => line.startsWith('exitCode: ')).split('exitCode: ')[1],
     );
     return exitCode ?? -1;
+  }
+
+  /// Returns the JSON encoded command of the last CMake generate, null if unknown.
+  Future<String?> _getLastGenCommand() async {
+    final statusFile = File.fromUri(outDir.resolve(lastGenStatusFile));
+    if (!await statusFile.exists()) {
+      return null;
+    }
+    const prefix = 'generateCommand: ';
+    for (final line in await statusFile.readAsLines()) {
+      if (line.startsWith(prefix)) return line.substring(prefix.length);
+    }
+    return null;
   }
 
   static final androidAbis = {

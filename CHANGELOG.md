@@ -8,6 +8,7 @@
   - add `linkingEnabled` to `CMakeBuilder.runStandalone`
 - fix: run `vcvars*.bat` as `.\vcvars*.bat` in `environmentFromBatchFile`, so it is found when `NoDefaultCurrentDirectoryInExePath` is set
 - fix: treat the build output directory as a directory even without a trailing slash, so `skipGenerateIfCached` works with `buildLocal` and architectures no longer share one generate status file
+- fix: `skipGenerateIfCached` only skips generating if the generate command is unchanged, so changed defines, e.g. from switching linking modes with `staticWhenLinking`, take effect
 
 ## 0.3.2
 

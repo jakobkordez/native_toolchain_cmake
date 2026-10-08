@@ -178,9 +178,10 @@ These predate this feature.
    - Different architectures shared one `ntc_last_generate_status.txt`.
 
    `RunCMakeBuilder` now adds the trailing slash to any `outDir`, including one passed explicitly.
-3. **Open.** With an explicit `outDir`, static and shared builds share one CMake cache. Combined with
-   `skipGenerateIfCached`, switching linking modes skips the configure step that would change
-   `BUILD_SHARED_LIBS`. Use a different `outDir` per mode.
+3. **Fixed.** `skipGenerateIfCached` skipped the configure step even when its arguments had
+   changed. With an explicit `outDir`, static and shared builds share one CMake cache, so
+   switching linking modes didn't change `BUILD_SHARED_LIBS`. The generate status file now
+   records the configure command, and the step is only skipped if it is unchanged.
 
 ## Open decision before releasing 0.3.3
 
@@ -193,7 +194,6 @@ needs "static" or "dynamic", so a preference is enough.
 
 1. **Finish step 1:**
    - Decide on the parameter names above.
-   - Fix the open issues above.
    - Add `dart build cli` for `example/add_link` to the examples CI on Windows, Linux and macOS.
 2. **Try the step 1 pattern on a real multi-library C++ project**, e.g. dartcv4/OpenCV, before
    designing step 2. It should answer three questions:
