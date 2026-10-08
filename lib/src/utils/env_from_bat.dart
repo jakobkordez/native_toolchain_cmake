@@ -18,7 +18,9 @@ Future<Map<String, String>> environmentFromBatchFile(
   final dir = batchFile.resolve('.');
   const separator = '=======';
   final processResult = await Process.run(
-    'set && echo $separator && $fileName ${arguments.join(' ')} > nul && set',
+    // `.\` because cmd doesn't look in the working directory for bare names
+    // if NoDefaultCurrentDirectoryInExePath is set.
+    'set && echo $separator && .\\$fileName ${arguments.join(' ')} > nul && set',
     [],
     runInShell: true,
     workingDirectory: dir.toFilePath(),

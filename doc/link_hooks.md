@@ -164,19 +164,19 @@ archives but `CLinker` links them:
 - Linux and macOS. CI's `dart test` will run the new linking test there for the first time.
 - Android and iOS. No Flutter example uses a link hook yet.
 
-## Known issues found along the way
+## Issues found along the way
 
-These predate this feature and are not fixed:
+These predate this feature.
 
-1. [env_from_bat.dart](../lib/src/utils/env_from_bat.dart) runs `vcvars*.bat` by bare file name.
-   It fails when `NoDefaultCurrentDirectoryInExePath` is set, because cmd then doesn't search
-   the working directory. Running the batch file by its full path would fix it.
-2. With `buildLocal`, the build folder URI has no trailing slash, so
+1. **Fixed.** [env_from_bat.dart](../lib/src/utils/env_from_bat.dart) ran `vcvars*.bat` by bare
+   file name. That failed when `NoDefaultCurrentDirectoryInExePath` is set, because cmd then
+   doesn't search the working directory. It now runs `.\vcvars*.bat`.
+2. **Open.** With `buildLocal`, the build folder URI has no trailing slash, so
    `outDir.resolve('CMakeCache.txt')` points one folder up (`build/linux/` instead of
    `build/linux/x64/`). As a result:
    - `skipGenerateIfCached` never takes effect with `buildLocal`.
    - Different architectures share one `ntc_last_generate_status.txt`.
-3. With an explicit `outDir`, static and shared builds share one CMake cache. Combined with
+3. **Open.** With an explicit `outDir`, static and shared builds share one CMake cache. Combined with
    `skipGenerateIfCached`, switching linking modes skips the configure step that would change
    `BUILD_SHARED_LIBS`. Use a different `outDir` per mode.
 
@@ -191,7 +191,7 @@ needs "static" or "dynamic", so a preference is enough.
 
 1. **Finish step 1:**
    - Decide on the parameter names above.
-   - Fix known issues 1 and 2.
+   - Fix the open issues above.
    - Add `dart build cli` for `example/add_link` to the examples CI on Windows, Linux and macOS.
 2. **Try the step 1 pattern on a real multi-library C++ project**, e.g. dartcv4/OpenCV, before
    designing step 2. It should answer three questions:
