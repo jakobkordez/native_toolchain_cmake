@@ -44,6 +44,71 @@ hooks:
         ninja_version: null # e.g., "1.10.2"
 ```
 
+## Link Hooks
+
+A build hook can hand static libraries to a link hook (`hook/link.dart`) instead of bundling
+them, so native code unused by the app can be dropped. See
+[example/add_link](https://github.com/rainyl/native_toolchain_cmake/tree/main/example/add_link).
+
+Linking is only enabled for `dart build cli` and Flutter profile and release builds. `dart run`,
+`dart test` and Flutter debug builds bundle the build hook's output directly, so the build hook
+has to handle both cases.
+
+1. Build static libraries when linking is enabled and shared libraries otherwise. This sets
+   `BUILD_SHARED_LIBS`, so declare the library without `SHARED`, e.g. `add_library(add src/add.c)`.
+   It also turns on position independent code and per-function sections (CMake 3.15+).
+
+   ```dart
+   final installDir = input.outputDirectory.resolve('install/');
+   await CMakeBuilder.create(
+     name: 'add',
+     sourceDir: input.packageRoot.resolve('src/'),
+     defines: {'CMAKE_INSTALL_PREFIX': installDir.toFilePath()},
+     targets: ['install'],
+     staticWhenLinking: true,
+   ).run(input: input, output: output);
+   ```
+
+2. Route the static libraries to the link hook:
+
+   ```dart
+   final linking = input.config.linkingEnabled;
+   await output.findAndAddCodeAssets(
+     input,
+     outDir: installDir,
+     names: {'add': 'add.dart'},
+     linkMode: linking ? StaticLinking() : null,
+     routing: linking ? ToLinkHook(input.packageName) : const ToAppBundle(),
+   );
+   ```
+
+3. Link them into a shared library in `hook/link.dart`, e.g. with `CLinker` from
+   [native_toolchain_c](https://pub.dev/packages/native_toolchain_c):
+
+   ```dart
+   await link(args, (input, output) async {
+     await CLinker.library(
+       name: 'add',
+       assetName: 'add.dart', // same asset id as in the build hook
+       sources: [for (final library in input.assets.code) library.file!.toFilePath()],
+       linkerOptions: LinkerOptions.treeshake(symbolsToKeep: ['add']),
+       flags: [if (input.config.code.targetOS == OS.windows) '/MD'],
+     ).run(input: input, output: output);
+   });
+   ```
+
+Things to keep in mind when linking with `CLinker`:
+
+- It uses its own compiler (`input.config.code.cCompiler` or what it finds on the host), not the
+  CMake toolchain. On Linux, CMake builds with GCC by default. For C++ libraries, pass
+  `language: Language.cpp` and the matching `cppLinkStdLib`.
+- Pass every static library the shared library needs, including third-party ones the CMake
+  project builds, and system libraries via `libraries`.
+- On Windows it supports MSVC only. It exports the kept symbols through a generated `.def` file.
+  With `symbolsToKeep: null` (keep all), only symbols marked `__declspec(dllexport)` are exported.
+- On Windows it links against the static C runtime unless `/MD` is passed, while CMake compiles
+  with the dynamic one by default.
+
 ## NDK Discovery
 
 When targeting Android, the NDK root directory is resolved in the following

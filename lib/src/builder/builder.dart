@@ -88,6 +88,28 @@ class CMakeBuilder implements Builder {
   /// Whether to use all processors for parallel jobs.
   final bool parallelUseAllProcessors;
 
+  /// Whether to build static libraries for a link hook when linking is enabled,
+  /// and shared libraries otherwise.
+  ///
+  /// If true and the build hook runs with [BuildConfig.linkingEnabled], the project is
+  /// configured with:
+  ///   - `BUILD_SHARED_LIBS=OFF`, so `add_library()` without `SHARED` builds static libraries.
+  ///   - `CMAKE_POSITION_INDEPENDENT_CODE=ON`, so they can be linked into a shared library.
+  ///   - `-ffunction-sections -fdata-sections` (GCC/Clang) or `/Gy /Gw` (MSVC), so the
+  ///     link hook can drop unused functions. This needs CMake 3.15 or newer.
+  ///
+  /// If linking is disabled, `BUILD_SHARED_LIBS=ON` is set instead, so the same
+  /// `CMakeLists.txt` builds shared libraries to bundle directly.
+  ///
+  /// Entries in [defines] take precedence over these. If [buildLocal] is true, static builds
+  /// are performed in `{sourceDir}/build/{platform}/{arch}-static` instead.
+  ///
+  /// Route the static libraries to the link hook with [ToLinkHook], e.g. via
+  /// `output.findAndAddCodeAssets(..., linkMode: StaticLinking(), routing: ToLinkHook(...))`,
+  /// and link them into a shared library in `hook/link.dart`. Linking is disabled for
+  /// `dart run`, `dart test` and Flutter debug builds, where this has no effect.
+  final bool staticWhenLinking;
+
   /// This constructor initializes a new build config from [sourceDir].
   ///
   /// Parameters:
@@ -109,6 +131,8 @@ class CMakeBuilder implements Builder {
   /// - [logger]: (Optional) A [Logger] for outputting log messages.
   /// - [buildLocal]: Flag indicating if the build should be performed locally;
   ///   defaults to `false`.
+  /// - [staticWhenLinking]: Whether to build static libraries for a link hook
+  ///   when linking is enabled; defaults to `false`.
   CMakeBuilder.create({
     required this.name,
     required Uri sourceDir,
@@ -126,6 +150,7 @@ class CMakeBuilder implements Builder {
     this.useVcvars = true,
     this.parallelJobs,
     this.parallelUseAllProcessors = false,
+    this.staticWhenLinking = false,
   }) : sourceDir = sourceDir.isAbsolute ? sourceDir : Directory.fromUri(sourceDir).absolute.uri,
        cmakeListsDir = sourceDir.isAbsolute ? sourceDir : Directory.fromUri(sourceDir).absolute.uri;
 
@@ -158,6 +183,8 @@ class CMakeBuilder implements Builder {
   /// - [logger]: (Optional) A [Logger] for outputting log messages.
   /// - [buildLocal]: Flag indicating if the build should be performed locally;
   ///   defaults to `false`.
+  /// - [staticWhenLinking]: Whether to build static libraries for a link hook
+  ///   when linking is enabled; defaults to `false`.
   CMakeBuilder.fromGit({
     required this.name,
     required String gitUrl,
@@ -179,6 +206,7 @@ class CMakeBuilder implements Builder {
     this.useVcvars = true,
     this.parallelJobs,
     this.parallelUseAllProcessors = false,
+    this.staticWhenLinking = false,
   }) : sourceDir = sourceDir.isAbsolute ? sourceDir : Directory.fromUri(sourceDir).absolute.uri,
        cmakeListsDir = sourceDir.isAbsolute ? sourceDir : Directory.fromUri(sourceDir).absolute.uri {
     // Some platforms will error if directory does not exist, create it.
@@ -295,6 +323,9 @@ class CMakeBuilder implements Builder {
   /// of [BuildInput] or [BuildOutputBuilder].
   ///
   /// Useful for standalone build scripts outside of `hook/build.dart`.
+  ///
+  /// [linkingEnabled] decides whether [staticWhenLinking] applies, it defaults to
+  /// `input.config.linkingEnabled` if [input] is provided, otherwise `false`.
   Future<void> runStandalone({
     required Uri outputDirectory,
     OS? targetOS,
@@ -307,11 +338,17 @@ class CMakeBuilder implements Builder {
     Map<String, dynamic>? userDefines,
     BuildInput? input,
     bool skipGenerateIfCached = false,
+    bool? linkingEnabled,
   }) async {
     targetOS ??= OS.current;
     targetArchitecture ??= Architecture.current;
     logger ??= this.logger;
     userDefines ??= const {};
+    linkingEnabled ??= input?.config.linkingEnabled ?? false;
+    final staticForLinking = staticWhenLinking && linkingEnabled;
+    if (staticForLinking) {
+      logger?.info('Linking is enabled, building static libraries for the link hook.');
+    }
 
     // do not override user specified output directory if they also set buildLocal to true
     if (outDir == null && buildLocal) {
@@ -320,7 +357,9 @@ class CMakeBuilder implements Builder {
       if (targetOS == OS.iOS && iOS?.targetSdk == IOSSdk.iPhoneSimulator) {
         plat = "iossimulator";
       }
-      final arch = targetArchitecture.name.toLowerCase();
+      var arch = targetArchitecture.name.toLowerCase();
+      // keep static and shared builds apart, they differ in the CMake cache
+      if (staticForLinking) arch = '$arch-static';
       outDir = sourceDir.resolve('build/').resolve('$plat/').resolve(arch).normalizePath();
     }
     final effectiveOutDir = outDir ?? outputDirectory;
@@ -412,6 +451,8 @@ class CMakeBuilder implements Builder {
       userConfig: userConfig,
       parallelJobs: parallelJobs,
       parallelUseAllProcessors: parallelUseAllProcessors,
+      staticWhenLinking: staticWhenLinking,
+      linkingEnabled: linkingEnabled,
     );
 
     // Do not remove this line for potential extra variables in the future

@@ -1,5 +1,12 @@
 # native_toolchain_cmake
 
+## 0.3.3
+
+- new: support splitting building and linking across build and link hooks, see the `Link Hooks` section in the README and `example/add_link`
+  - add `CMakeBuilder.staticWhenLinking` to build static libraries for a link hook when linking is enabled, and shared libraries otherwise
+  - add `linkMode` to `findCodeAssets` and `findAndAddCodeAssets`, and `routing` to `findAndAddCodeAssets`, `addCodeAsset` and `addAllCodeAssets`, to route static libraries to a link hook
+  - add `linkingEnabled` to `CMakeBuilder.runStandalone`
+
 ## 0.3.2
 
 - widen the `code_assets` constraint to `>=1.0.0 <3.0.0` to allow `code_assets` 2.x, which is compatible with both 1.x and 2.x

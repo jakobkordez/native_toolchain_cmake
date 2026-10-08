@@ -184,4 +184,88 @@ void main() {
 
     expect(added.length, equals(1));
   });
+
+  group('link hook', () {
+    Future<(BuildInput, File)> setup({required String libFileName}) async {
+      final baseDir = await tempDirForTest();
+      final sharedDir = await tempDirForTest();
+      final libDir = Directory.fromUri(baseDir.resolve('lib'));
+      await libDir.create();
+      final libFile = File.fromUri(libDir.uri.resolve(libFileName));
+      await libFile.writeAsString('dummy library content');
+
+      final buildInputBuilder = BuildInputBuilder()
+        ..setupShared(
+          packageName: 'add',
+          packageRoot: baseDir,
+          outputFile: baseDir.resolve('output.json'),
+          outputDirectoryShared: sharedDir,
+        )
+        ..config.setupBuild(linkingEnabled: true)
+        ..addExtension(
+          CodeAssetExtension(
+            targetOS: OS.current,
+            // The Dart and Flutter SDKs always prefer dynamic, also when linking.
+            linkModePreference: LinkModePreference.dynamic,
+            targetArchitecture: Architecture.current,
+          ),
+        );
+      return (BuildInput(buildInputBuilder.json), libFile);
+    }
+
+    test('finds static libraries and routes them to the link hook', () async {
+      final (buildInput, libFile) = await setup(libFileName: OS.current.staticlibFileName('add'));
+      final buildOutputBuilder = BuildOutputBuilder();
+
+      final added = await buildOutputBuilder.findAndAddCodeAssets(
+        buildInput,
+        outDir: libFile.parent.uri,
+        names: {'add': 'add.dart'},
+        linkMode: StaticLinking(),
+        routing: const ToLinkHook('add'),
+        logger: logger,
+      );
+
+      expect(added, hasLength(1));
+      expect(added.single.linkMode, StaticLinking());
+      expect(added.single.file?.toFilePath(), equals(libFile.absolute.path));
+      final buildOutput = BuildOutput(buildOutputBuilder.json);
+      expect(buildOutput.assets.encodedAssets, isEmpty);
+      expect(buildOutput.assets.encodedAssetsForLinking['add'], hasLength(1));
+    });
+
+    test('does not find static libraries without linkMode', () async {
+      final (buildInput, libFile) = await setup(libFileName: OS.current.staticlibFileName('add'));
+
+      final added = await BuildOutputBuilder().findAndAddCodeAssets(
+        buildInput,
+        outDir: libFile.parent.uri,
+        names: {'add': 'add.dart'},
+        logger: logger,
+      );
+
+      expect(added, isEmpty);
+    });
+
+    test('deduplicates assets per routing', () async {
+      final (buildInput, libFile) = await setup(libFileName: OS.current.dylibFileName('add'));
+      final buildOutputBuilder = BuildOutputBuilder();
+      final asset = CodeAsset(
+        package: 'add',
+        name: 'add.dart',
+        linkMode: DynamicLoadingBundled(),
+        file: libFile.uri,
+      );
+
+      expect(buildOutputBuilder.addCodeAsset(asset), isTrue);
+      expect(buildOutputBuilder.addCodeAsset(asset), isFalse);
+      expect(buildOutputBuilder.addCodeAsset(asset, routing: const ToLinkHook('add')), isTrue);
+      expect(buildOutputBuilder.addCodeAsset(asset, routing: const ToLinkHook('add')), isFalse);
+      expect(buildOutputBuilder.addedAssetIds, {asset.id});
+
+      final buildOutput = BuildOutput(buildOutputBuilder.json);
+      expect(buildOutput.assets.encodedAssets, hasLength(1));
+      expect(buildOutput.assets.encodedAssetsForLinking['add'], hasLength(1));
+    });
+  });
 }

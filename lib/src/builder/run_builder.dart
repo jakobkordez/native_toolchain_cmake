@@ -71,6 +71,13 @@ class RunCMakeBuilder {
   final int? parallelJobs;
   final bool parallelUseAllProcessors;
 
+  /// Configure the project to build static libraries for a link hook if [linkingEnabled],
+  /// otherwise shared libraries, see `CMakeBuilder.staticWhenLinking`.
+  final bool staticWhenLinking;
+
+  /// Whether the build hook runs with linking enabled.
+  final bool linkingEnabled;
+
   RunCMakeBuilder({
     required this.sourceDir,
     required this.outDir,
@@ -90,6 +97,8 @@ class RunCMakeBuilder {
     this.logLevel = LogLevel.STATUS,
     this.lastGenStatusFile = 'ntc_last_generate_status.txt',
     this.parallelUseAllProcessors = false,
+    this.staticWhenLinking = false,
+    this.linkingEnabled = false,
     int? parallelJobs,
     UserConfig? userConfig,
     CodeConfig? codeConfig,
@@ -123,6 +132,9 @@ class RunCMakeBuilder {
   Future<Uri> currentPackageRoot() async => Uri.directory(await getPackagePath("native_toolchain_cmake"));
 
   Future<Uri> iosToolchainCmake() async => (await currentPackageRoot()).resolve('cmake/ios.toolchain.cmake');
+
+  Future<Uri> staticForLinkingCmake() async =>
+      (await currentPackageRoot()).resolve('cmake/static_for_linking.cmake');
 
   Future<Uri> androidToolchainCmake({Map<String, String>? environment}) async {
     final tool = await androidNdk.defaultResolver?.resolve(
@@ -208,6 +220,8 @@ class RunCMakeBuilder {
       if (buildMode == BuildMode.debug) '-DCMAKE_C_FLAGS_DEBUG=-DDEBUG',
       if (buildMode == BuildMode.debug) '-DCMAKE_CXX_FLAGS_DEBUG=-DDEBUG',
       ...defs,
+      // before user defines, so they can override these
+      if (staticWhenLinking) ...await _generateLinkingDefines(),
     ];
     defines.forEach((k, v) => _defines.add('-D$k=${v ?? "1"}'));
 
@@ -383,6 +397,19 @@ class RunCMakeBuilder {
     final toolchain = await linuxToolchainCmake();
     defs.add('-DCMAKE_TOOLCHAIN_FILE=${toolchain.normalizePath().toFilePath()}');
     return defs;
+  }
+
+  Future<List<String>> _generateLinkingDefines() async {
+    if (!linkingEnabled) {
+      // no link hook will run, build shared libraries to bundle directly
+      return ['-DBUILD_SHARED_LIBS=ON'];
+    }
+    final projectInclude = await staticForLinkingCmake();
+    return [
+      '-DBUILD_SHARED_LIBS=OFF',
+      '-DCMAKE_POSITION_INDEPENDENT_CODE=ON',
+      '-DCMAKE_PROJECT_INCLUDE=${projectInclude.normalizePath().toFilePath()}',
+    ];
   }
 
   /// Returns the exit code of the last CMake generate command.
