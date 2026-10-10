@@ -1,6 +1,6 @@
 # Link hook support
 
-Status as of 2026-10-08, targeting the unreleased 0.3.3. For usage, see the
+Status as of 2026-10-09, targeting the unreleased 0.3.3. For usage, see the
 [Link Hooks section in the README](../README.md#link-hooks) and
 [example/add_link](../example/add_link).
 
@@ -99,10 +99,12 @@ Implementation: [builder.dart](../lib/src/builder/builder.dart),
 
 In [add_assets.dart](../lib/src/utils/add_assets.dart):
 
-- `findCodeAssets` and `findAndAddCodeAssets` take `linkMode: LinkMode?`. It overrides the mode
-  derived from the preference and decides the expected file name, e.g. `libadd.a`.
+- `findCodeAssets` and `findAndAddCodeAssets` take `linkModePreference: LinkModePreference?`. It
+  overrides `input.config.code.linkModePreference` and decides the expected file name, e.g.
+  `libadd.a`.
 - `findAndAddCodeAssets`, `addCodeAsset` and `addAllCodeAssets` take
   `routing: AssetRouting = const ToAppBundle()`.
+- See [Parameter types](#parameter-types) for why these types were chosen.
 - Duplicate checks apply per routing, so the same asset can be bundled and routed to a link
   hook. `addedAssetIds` still returns the ids bundled into the app, as before.
 
@@ -126,8 +128,8 @@ In [add_assets.dart](../lib/src/utils/add_assets.dart):
 |---|---|---|
 | Build static libraries when linking | `CLibrary`: automatic. `CBuilder`: `linkModePreference` | `staticWhenLinking: true` |
 | Emitting the asset | `CBuilder.run` emits it, `assetName` set on the builder | A separate `findAndAddCodeAssets` call, since CMake outputs are only known after the build |
-| Link mode parameter | `LinkModePreference?` | `LinkMode?` |
-| Routing parameter | `List<AssetRouting>` | A single `AssetRouting` |
+| Link mode parameter | `LinkModePreference?` | `LinkModePreference?` |
+| Routing parameter | `List<AssetRouting>` | A single `AssetRouting`, as in `assets.code.add` |
 | Routing to a link hook while linking is off | `assert` in `CBuilder.run` | Caught by hooks output validation after the hook finishes |
 | Link hook | `CLinker` / `CLibrary.link()` | None of our own; use `CLinker` |
 | One definition shared by both hooks | Yes (`CLibrary`) | No; names are repeated in both hooks |
@@ -183,18 +185,23 @@ These predate this feature.
    switching linking modes didn't change `BUILD_SHARED_LIBS`. The generate status file now
    records the configure command, and the step is only skipped if it is unchanged.
 
-## Open decision before releasing 0.3.3
+## Parameter types
 
-Should the helper parameters match `CBuilder.run` exactly? That would mean
-`linkModePreference: LinkModePreference?` instead of `linkMode: LinkMode?`, and `routing` as a
-`List<AssetRouting>`. It is free now and a breaking change after release. Finding files only
-needs "static" or "dynamic", so a preference is enough.
+Decided before releasing 0.3.3, because changing them afterwards would be a breaking change:
+
+- **`linkModePreference: LinkModePreference?`, as in `CBuilder.run`.** Finding files only needs
+  "static" or "dynamic". A `LinkMode` would also accept modes such as `DynamicLoadingSystem` or
+  `LookupInProcess`, which don't describe a file in the build output.
+- **`routing: AssetRouting`, a single routing as in `assets.code.add`.** `CBuilder.run` takes a
+  list instead. A single routing keeps the `bool` result of `addCodeAsset` unambiguous. All
+  routings would get the same link mode, and a static asset can't be bundled anyway. To route
+  an asset to several places, call the helper once per routing. Duplicate checks are per
+  routing.
 
 ## Next steps
 
-1. **Finish step 1:**
-   - Decide on the parameter names above.
-   - Add `dart build cli` for `example/add_link` to the examples CI on Windows, Linux and macOS.
+1. **Finish step 1:** add `dart build cli` for `example/add_link` to the examples CI on Windows,
+   Linux and macOS.
 2. **Try the step 1 pattern on a real multi-library C++ project**, e.g. dartcv4/OpenCV, before
    designing step 2. It should answer three questions:
    - Does `CLinker` cope with many archives (third-party included) being whole-archived?

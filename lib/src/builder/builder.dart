@@ -105,9 +105,10 @@ class CMakeBuilder implements Builder {
   /// are performed in `{sourceDir}/build/{platform}/{arch}-static` instead.
   ///
   /// Route the static libraries to the link hook with [ToLinkHook], e.g. via
-  /// `output.findAndAddCodeAssets(..., linkMode: StaticLinking(), routing: ToLinkHook(...))`,
-  /// and link them into a shared library in `hook/link.dart`. Linking is disabled for
-  /// `dart run`, `dart test` and Flutter debug builds, where this has no effect.
+  /// `output.findAndAddCodeAssets(..., linkModePreference: LinkModePreference.static,
+  /// routing: ToLinkHook(...))`, and link them into a shared library in `hook/link.dart`.
+  /// Linking is disabled for `dart run`, `dart test` and Flutter debug builds, where this has
+  /// no effect.
   final bool staticWhenLinking;
 
   /// This constructor initializes a new build config from [sourceDir].

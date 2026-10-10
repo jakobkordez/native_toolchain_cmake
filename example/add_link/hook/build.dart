@@ -22,7 +22,7 @@ void main(List<String> args) async {
       input,
       outDir: installDir,
       names: {'add_link': 'add_link.dart'},
-      linkMode: linking ? StaticLinking() : null,
+      linkModePreference: linking ? LinkModePreference.static : null,
       routing: linking ? ToLinkHook(input.packageName) : const ToAppBundle(),
     );
   });

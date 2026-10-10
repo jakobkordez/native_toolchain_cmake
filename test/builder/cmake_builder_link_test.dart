@@ -73,7 +73,7 @@ void main() {
       buildInput,
       outDir: installLib,
       names: {name: '$name.dart'},
-      linkMode: StaticLinking(),
+      linkModePreference: LinkModePreference.static,
       routing: const ToLinkHook(name),
       logger: logger,
     );

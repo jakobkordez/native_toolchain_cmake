@@ -4,7 +4,7 @@
 
 - new: support splitting building and linking across build and link hooks, see the `Link Hooks` section in the README and `example/add_link`
   - add `CMakeBuilder.staticWhenLinking` to build static libraries for a link hook when linking is enabled, and shared libraries otherwise
-  - add `linkMode` to `findCodeAssets` and `findAndAddCodeAssets`, and `routing` to `findAndAddCodeAssets`, `addCodeAsset` and `addAllCodeAssets`, to route static libraries to a link hook
+  - add `linkModePreference` to `findCodeAssets` and `findAndAddCodeAssets`, and `routing` to `findAndAddCodeAssets`, `addCodeAsset` and `addAllCodeAssets`, to route static libraries to a link hook
   - add `linkingEnabled` to `CMakeBuilder.runStandalone`
 - fix: run `vcvars*.bat` as `.\vcvars*.bat` in `environmentFromBatchFile`, so it is found when `NoDefaultCurrentDirectoryInExePath` is set
 - fix: treat the build output directory as a directory even without a trailing slash, so `skipGenerateIfCached` works with `buildLocal` and architectures no longer share one generate status file

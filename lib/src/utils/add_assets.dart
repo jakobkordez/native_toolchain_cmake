@@ -37,8 +37,8 @@ extension BuildOutputBuilderCodeAssets on BuildOutputBuilder {
   /// ```
   ///
   /// The expected filename is computed using the current operating system's naming conventions
-  /// combined with [linkMode], or a concrete [LinkMode] derived from
-  /// [input.config.code.linkModePreference] if [linkMode] is null.
+  /// combined with a concrete [LinkMode] derived from [linkModePreference], or from
+  /// [input.config.code.linkModePreference] if [linkModePreference] is null.
   /// For each file that ends with the computed library filename for one of the provided [names],
   /// a [CodeAsset] is created and added to [assets.code] with [routing] if it hasn't already been added.
   ///
@@ -46,7 +46,7 @@ extension BuildOutputBuilderCodeAssets on BuildOutputBuilder {
   /// as [assets] is not iterable.
   ///
   /// To hand static libraries to a link hook instead of bundling them, pass
-  /// [StaticLinking] as [linkMode] and [ToLinkHook] as [routing]. This is only allowed
+  /// [LinkModePreference.static] as [linkModePreference] and [ToLinkHook] as [routing]. This is only allowed
   /// if [input.config.linkingEnabled] is true, see [CMakeBuilder.staticWhenLinking].
   ///
   /// Returns a list of the added code assets.
@@ -77,7 +77,7 @@ extension BuildOutputBuilderCodeAssets on BuildOutputBuilder {
   ///   input,
   ///   outDir: myOutputUri,
   ///   names: {'add': 'add.dart'},
-  ///   linkMode: linking ? StaticLinking() : null,
+  ///   linkModePreference: linking ? LinkModePreference.static : null,
   ///   routing: linking ? ToLinkHook(input.packageName) : const ToAppBundle(),
   /// );
   /// ```
@@ -87,7 +87,7 @@ extension BuildOutputBuilderCodeAssets on BuildOutputBuilder {
     Uri? outDir,
     Logger? logger,
     bool regExp = false,
-    LinkMode? linkMode,
+    LinkModePreference? linkModePreference,
     AssetRouting routing = const ToAppBundle(),
   }) async {
     final foundAssets = await findCodeAssets(
@@ -96,7 +96,7 @@ extension BuildOutputBuilderCodeAssets on BuildOutputBuilder {
       outDir: outDir,
       logger: logger,
       regExp: regExp,
-      linkMode: linkMode,
+      linkModePreference: linkModePreference,
     );
     final addedAssets = addAllCodeAssets(foundAssets, logger: logger, routing: routing);
     return addedAssets;
@@ -115,8 +115,8 @@ extension BuildOutputBuilderCodeAssets on BuildOutputBuilder {
   /// {r'(lib)?add-\d\.(dll|so|dylib)': 'native_foo.dart'}.
   /// ```
   ///
-  /// The found assets get [linkMode], or a concrete [LinkMode] derived from
-  /// [input.config.code.linkModePreference] if [linkMode] is null. Without [regExp],
+  /// The found assets get a concrete [LinkMode] derived from [linkModePreference], or from
+  /// [input.config.code.linkModePreference] if [linkModePreference] is null. Without [regExp],
   /// it also decides the expected file name, e.g. `libadd.a` instead of `libadd.so`.
   ///
   /// returns a list of the found code assets.
@@ -126,11 +126,11 @@ extension BuildOutputBuilderCodeAssets on BuildOutputBuilder {
     Uri? outDir,
     Logger? logger,
     bool regExp = false,
-    LinkMode? linkMode,
+    LinkModePreference? linkModePreference,
   }) async {
-    final preferredMode = input.config.code.linkModePreference;
+    final preferredMode = linkModePreference ?? input.config.code.linkModePreference;
     final searchDir = Directory.fromUri(outDir ?? input.outputDirectory);
-    linkMode ??= getLinkMode(preferredMode);
+    final linkMode = getLinkMode(preferredMode);
     final Set<CodeAsset> foundAssets = {};
 
     logger?.info('Searching for libraries in ${searchDir.path}');

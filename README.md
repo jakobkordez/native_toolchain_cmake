@@ -77,7 +77,7 @@ has to handle both cases.
      input,
      outDir: installDir,
      names: {'add': 'add.dart'},
-     linkMode: linking ? StaticLinking() : null,
+     linkModePreference: linking ? LinkModePreference.static : null,
      routing: linking ? ToLinkHook(input.packageName) : const ToAppBundle(),
    );
    ```

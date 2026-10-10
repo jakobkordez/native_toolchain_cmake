@@ -221,7 +221,7 @@ void main() {
         buildInput,
         outDir: libFile.parent.uri,
         names: {'add': 'add.dart'},
-        linkMode: StaticLinking(),
+        linkModePreference: LinkModePreference.static,
         routing: const ToLinkHook('add'),
         logger: logger,
       );
@@ -234,7 +234,7 @@ void main() {
       expect(buildOutput.assets.encodedAssetsForLinking['add'], hasLength(1));
     });
 
-    test('does not find static libraries without linkMode', () async {
+    test('does not find static libraries without linkModePreference', () async {
       final (buildInput, libFile) = await setup(libFileName: OS.current.staticlibFileName('add'));
 
       final added = await BuildOutputBuilder().findAndAddCodeAssets(
